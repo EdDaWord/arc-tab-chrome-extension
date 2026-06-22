@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Arc Tabs</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="header">
+    <span class="title">Arc Tabs</span>
+    <a href="#" id="openOptions">Settings</a>
+  </div>
+
+  <div class="current-tab" id="currentTabSection">
+    <div class="tab-info">
+      <img id="tabFavicon" class="favicon" src="" alt="" />
+      <span id="tabTitle" class="tab-title"></span>
+    </div>
+    <label class="keep-row">
+      <input type="checkbox" id="keepTab" />
+      <span>Keep — exclude from auto-close</span>
+    </label>
+  </div>
+
+  <div class="section-header">
+    <span>Recently closed</span>
+    <button id="clearArchive" class="link-btn">Clear all</button>
+  </div>
+
+  <ul id="archiveList" class="archive-list"></ul>
+  <div id="emptyState" class="empty">No closed tabs yet.</div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
