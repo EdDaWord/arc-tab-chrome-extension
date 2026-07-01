@@ -1,6 +1,7 @@
-import { ALARM_NAME, ALARM_PERIOD_MINUTES, TAB_GROUP_ID_NONE } from './defaults.js';
+import { ALARM_NAME, ALARM_PERIOD_MINUTES, TAB_GROUP_ID_NONE, EJECT_GRACE_MS } from './defaults.js';
 import { getSettings, getKeepOverrides, getActivationTimestamps, recordActivation, removeActivationTimestamp, pushArchive } from './storage.js';
 import { isEligibleToClose } from './eligibility.js';
+import { shouldEjectLateGrouping } from './eject.js';
 
 // ── Alarm setup ──────────────────────────────────────────────────────────────
 
@@ -64,8 +65,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 // ── Group eject ──────────────────────────────────────────────────────────────
 
-// Track tabs that were just created so we can re-check them on onUpdated.
-const pendingEject = new Set();
+// Tabs just created, mapped to the deadline after which a late grouping is
+// considered deliberate (user drag) rather than the browser's auto-grouping
+// race. tabId -> ejectUntilMs.
+const pendingEject = new Map();
 
 chrome.tabs.onCreated.addListener(async (tab) => {
   // Capture before any await — onActivated for the new tab may fire concurrently.
@@ -91,8 +94,9 @@ chrome.tabs.onCreated.addListener(async (tab) => {
     if (!looksLikeSplitTab) {
       chrome.tabs.move(tab.id, { index: -1 }).catch(() => {});
     }
-    // Also watch for late grouping
-    pendingEject.add(tab.id);
+    // Also watch for late grouping, but only briefly — this catches the
+    // browser's async auto-grouping race, not a deliberate drag-in later.
+    pendingEject.set(tab.id, Date.now() + EJECT_GRACE_MS);
   }
 });
 
@@ -100,9 +104,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   if (!pendingEject.has(tabId)) return;
   if (changeInfo.groupId == null) return;
 
+  const ejectUntil = pendingEject.get(tabId);
   pendingEject.delete(tabId);
 
-  if (changeInfo.groupId === TAB_GROUP_ID_NONE) return;
+  // Only eject if this grouping happened inside the post-creation grace window.
+  // A later grouping is a deliberate user drag and must be left alone.
+  if (!shouldEjectLateGrouping({ now: Date.now(), ejectUntil, newGroupId: changeInfo.groupId })) return;
 
   const settings = await getSettings();
   if (!settings.enabled) return;
